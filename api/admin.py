@@ -20,3 +20,8 @@ class LocationAdmin(admin.ModelAdmin):
 '''
 
 admin.site.register(DeliveryTracking)
+admin.site.register(CustomUser)
+admin.site.register(UserProfile)
+admin.site.register(DriverDocument)
+admin.site.register(Truck)
+admin.site.register(Analytics)

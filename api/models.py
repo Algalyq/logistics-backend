@@ -1,5 +1,7 @@
 from django.db import models
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AbstractUser, User
+from django.core.validators import MinValueValidator, MaxValueValidator
+import uuid
 
 class Location(models.Model):
     name = models.CharField(max_length=100)
@@ -34,8 +36,8 @@ class Order(models.Model):
     
     # Order identification
     order_id = models.CharField(max_length=20, unique=True)  # ORD-XXXXX format
-    customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='customer_orders')
-    driver = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='driver_orders')
+    customer = models.ForeignKey('CustomUser', on_delete=models.CASCADE, related_name='customer_orders')
+    driver = models.ForeignKey('CustomUser', on_delete=models.SET_NULL, null=True, blank=True, related_name='driver_orders')
     
     # Locations
     origin = models.ForeignKey(Location, on_delete=models.CASCADE, related_name='origin_orders')
@@ -70,8 +72,58 @@ class DeliveryTracking(models.Model):
     def __str__(self):
         return f"Tracking for {self.order.order_id} at {self.timestamp} - {self.progress}%"
 
+class DriverDocument(models.Model):
+    DOCUMENT_TYPES = [
+        ('id_card', 'ID Card'),
+        ('driver_license', 'Driver\'s License'),
+        ('truck_license', 'Truck License'),
+        ('other', 'Other'),
+    ]
+    
+    user = models.ForeignKey('CustomUser', on_delete=models.CASCADE, related_name='documents', null=True)
+    document_type = models.CharField(max_length=20, choices=DOCUMENT_TYPES)
+    document_number = models.CharField(max_length=100)
+    issue_date = models.DateField()
+    expiry_date = models.DateField()
+    image = models.ImageField(upload_to='driver_documents/', null=True, blank=True)
+    
+    def __str__(self):
+        return f"{self.document_type} - {self.document_number}"
+
+class Truck(models.Model):
+    TRUCK_TYPES = [
+        ('truck', 'Truck'),
+        ('van', 'Van'),
+        ('refrigerated', 'Refrigerated Truck'),
+        ('tanker', 'Tanker'),
+    ]
+    
+    license_plate = models.CharField(max_length=20, unique=True)
+    model = models.CharField(max_length=100)
+    year = models.PositiveIntegerField()
+    truck_type = models.CharField(max_length=20, choices=TRUCK_TYPES)
+    max_weight = models.DecimalField(max_digits=10, decimal_places=2)  # in kg
+    length = models.DecimalField(max_digits=6, decimal_places=2)  # in meters
+    tachograph_expiry = models.DateField()
+    is_active = models.BooleanField(default=True)
+    
+    def __str__(self):
+        return f"{self.license_plate} - {self.model} ({self.year})"
+
+class CustomUser(AbstractUser):
+    ROLE_CHOICES = [
+        ('customer', 'Customer'),
+        ('driver', 'Driver'),
+        ('admin', 'Admin'),
+    ]
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='customer')
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    
+    def __str__(self):
+        return f"{self.username} - {self.role}"
+
 class UserProfile(models.Model):
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='profile')
+    user = models.OneToOneField('CustomUser', on_delete=models.CASCADE, related_name='profile')
     phone = models.CharField(max_length=20, blank=True, null=True)
     role = models.CharField(max_length=20, choices=[
         ('customer', 'Customer'),
@@ -79,5 +131,30 @@ class UserProfile(models.Model):
         ('admin', 'Admin'),
     ], default='customer')
     
+    # Driver specific fields
+    experience_years = models.PositiveIntegerField(default=0, null=True, blank=True)
+    total_kilometers = models.PositiveIntegerField(default=0, null=True, blank=True)
+    documents = models.ManyToManyField(DriverDocument, blank=True)
+    assigned_truck = models.ForeignKey(Truck, on_delete=models.SET_NULL, null=True, blank=True)
+    
     def __str__(self):
         return f"{self.user.username} - {self.role}"
+
+class Analytics(models.Model):
+    user = models.ForeignKey('CustomUser', on_delete=models.CASCADE, related_name='analytics')
+    total_orders = models.PositiveIntegerField(default=0)
+    completed_orders = models.PositiveIntegerField(default=0)
+    total_distance = models.FloatField(default=0)  # in kilometers
+    total_revenue = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    average_rating = models.FloatField(
+        validators=[MinValueValidator(0.0), MaxValueValidator(5.0)],
+        default=0.0
+    )
+    month_year = models.CharField(max_length=7)  # Format: YYYY-MM
+    
+    class Meta:
+        verbose_name_plural = 'Analytics'
+        unique_together = ('user', 'month_year')
+    
+    def __str__(self):
+        return f"{self.user.username} - {self.month_year}"

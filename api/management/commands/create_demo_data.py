@@ -1,5 +1,5 @@
 from django.core.management.base import BaseCommand
-from django.contrib.auth.models import User
+from api.models import CustomUser
 from django.utils import timezone
 from datetime import timedelta
 import random
@@ -15,10 +15,11 @@ class Command(BaseCommand):
             return
             
         # Create admin user
-        admin_user, created = User.objects.get_or_create(
+        admin_user, created = CustomUser.objects.get_or_create(
             username='admin',
             defaults={
                 'email': 'admin@example.com',
+                'role': 'admin',
                 'first_name': 'Admin',
                 'last_name': 'User',
                 'is_staff': True,
@@ -28,40 +29,49 @@ class Command(BaseCommand):
         
         if created:
             admin_user.set_password('admin1234')
+            admin_user.is_staff = True
+            admin_user.is_superuser = True
             admin_user.save()
+            # Create profile for backward compatibility
             UserProfile.objects.create(user=admin_user, role='admin')
             self.stdout.write(self.style.SUCCESS(f'Created admin user: {admin_user.username}'))
         
         # Create driver user
-        driver_user, created = User.objects.get_or_create(
+        driver_user, created = CustomUser.objects.get_or_create(
             username='driver',
             defaults={
                 'email': 'driver@example.com',
-                'first_name': 'Nurzhan',
-                'last_name': 'A.',
+                'first_name': 'Almas',
+                'last_name': 'Sydykov',
+                'role': 'driver',
+                'phone': '+7777-123-4567'
             }
         )
         
         if created:
             driver_user.set_password('driver1234')
             driver_user.save()
-            UserProfile.objects.create(user=driver_user, role='driver', phone='+7777-123-4567')
+            # Create profile for backward compatibility
+            UserProfile.objects.create(user=driver_user, role='driver', phone=driver_user.phone)
             self.stdout.write(self.style.SUCCESS(f'Created driver user: {driver_user.username}'))
         
         # Create customer user
-        customer_user, created = User.objects.get_or_create(
+        customer_user, created = CustomUser.objects.get_or_create(
             username='customer',
             defaults={
                 'email': 'customer@example.com',
                 'first_name': 'Kaysar',
                 'last_name': 'Zhumabek',
+                'role': 'customer',
+                'phone': '+7777-987-6543'
             }
         )
         
         if created:
             customer_user.set_password('customer1234')
             customer_user.save()
-            UserProfile.objects.create(user=customer_user, role='customer', phone='+7777-987-6543')
+            # Create profile for backward compatibility
+            UserProfile.objects.create(user=customer_user, role='customer', phone=customer_user.phone)
             self.stdout.write(self.style.SUCCESS(f'Created customer user: {customer_user.username}'))
             
         # Create some sample orders if none exist
